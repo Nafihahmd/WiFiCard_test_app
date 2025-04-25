@@ -2,3 +2,7 @@
 *.pyc
 img/*
 wifi_test_results.xlsx
+# ignore Python virtual environments
+venv/
+.venv/
+env/

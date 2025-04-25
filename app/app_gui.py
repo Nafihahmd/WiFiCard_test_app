@@ -173,8 +173,8 @@ class HardwareTestApp:
         ))
 
         # 3) collect interface names
-        # self.interfaces = [dev.sys_name for dev in matches]
-        self.interfaces = ['wlan0', 'wlan1']  # For testing purposes, hardcoded to wlan0 and wlan1  
+        self.interfaces = [dev.sys_name for dev in matches]
+        # self.interfaces = ['wlan0', 'wlan1']  # For testing purposes, hardcoded to wlan0 and wlan1 
 
         # 4) debug-log exactly what we found
         if not self.interfaces:

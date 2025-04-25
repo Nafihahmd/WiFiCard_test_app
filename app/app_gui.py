@@ -81,38 +81,26 @@ class HardwareTestApp:
         self.log.config(state=tk.DISABLED)
 
     def refresh_interfaces(self):
-        # 1) Detect and log all net-subsystem devices
-        self.log_message("🔄 Refreshing interfaces…")
-        context = pyudev.Context()
-        net_devs = context.list_devices(subsystem="net")
-        net_devs = list(net_devs)  # consume iterator for length & reuse
-        self.log_message(f"Found {len(net_devs)} network devices")
+        # 1) announce start
+        self.log_message("Refreshing interfaces…")
 
-        # 2) Inspect each and filter by USB vendor/product
-        ifaces = []
-        for dev in net_devs:
-            props = dict(dev.properties)
-            self.log_message(f"Device {dev.sys_name}: subsystem={dev.subsystem}, properties={props}")  # :contentReference[oaicite:5]{index=5}
+        # 2) enumerate only 'net' devices that already carry the VID/PID properties
+        ctx = pyudev.Context()
+        # list_devices(**kwargs) forwards to match_subsystem() & match_property() :contentReference[oaicite:4]{index=4}
+        matches = list(ctx.list_devices(
+            subsystem="net",
+            ID_VENDOR_ID="148f",
+            ID_MODEL_ID="7601"
+        ))
 
-            parent = dev.find_parent('usb')  # catch usb_device or usb_interface :contentReference[oaicite:6]{index=6}
-            if parent:
-                pprops = dict(parent.properties)
-                self.log_message(f" ↳ USB parent: devtype={parent.device_type}, properties={pprops}")
-            else:
-                self.log_message(" ↳ No USB parent found")
+        # 3) collect interface names
+        self.interfaces = [dev.sys_name for dev in matches]
 
-            vid = parent and parent.get('ID_VENDOR_ID')
-            pid = parent and parent.get('ID_MODEL_ID')
-            if vid == '148f' and pid == '7601':
-                self.log_message(f" ✓ {dev.sys_name} matches MT7601U (VID:PID={vid}:{pid})")
-                ifaces.append(dev.sys_name)
-            else:
-                self.log_message(f" ✗ Skipped {dev.sys_name} (VID:PID={vid}:{pid})")
-
-        # 3) Store and log final result
-        self.interfaces = ifaces
-        self.log_message(f"Final interfaces: {self.interfaces}")
-
+        # 4) debug-log exactly what we found
+        if not self.interfaces:
+            self.log_message("No MT7601U interfaces found.")
+        else:
+            self.log_message(f"Found MT7601U interfaces: {self.interfaces}")
 
     def reset_tests(self):
         """Reset all tests for the next device."""

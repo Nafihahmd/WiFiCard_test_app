@@ -6,6 +6,7 @@ import subprocess
 import netifaces
 from openpyxl import Workbook, load_workbook
 from datetime import datetime
+from tkinter import ttk
 
 REPORT_FILE = "wifi_test_results.xlsx"
 
@@ -70,6 +71,16 @@ class HardwareTestApp:
         self.log = tk.Text(right, wrap=tk.WORD, height=15, state=tk.DISABLED)
         self.log.pack(fill=tk.BOTH, expand=True)
 
+        # Progress bar (below the Run Tests button)
+        self.progress_var = tk.DoubleVar()
+        self.progress = ttk.Progressbar(
+            self.root,
+            variable=self.progress_var,
+            maximum=1,            # will reset later to number of interfaces
+            mode='determinate',   # shows exact progress
+        )
+        self.progress.pack(fill=tk.X, padx=5, pady=5)
+
         # Run Tests button
         self.run_button = tk.Button(self.root, text="Run Tests", command=self.run_all_tests)
         self.run_button.pack(pady=5)
@@ -86,10 +97,11 @@ class HardwareTestApp:
         self.log.configure(state=tk.NORMAL)
         self.log.delete("1.0", tk.END)
         self.log.configure(state=tk.DISABLED)
+        self.progress_var.set(0)    # reset progress bar
 
     def reset_tests(self):
-        self.clear_log()
         """Reset all tests for the next device."""
+        self.clear_log()
 
     def configure_parameters(self):
         """Popup a window to allow user to edit MAC address, serial port, and model number simultaneously."""
@@ -174,7 +186,7 @@ class HardwareTestApp:
 
         # 3) collect interface names
         self.interfaces = [dev.sys_name for dev in matches]
-        # self.interfaces = ['wlan0', 'wlan1']  # For testing purposes, hardcoded to wlan0 and wlan1 
+        # self.interfaces = ['wlan0', 'wlan1']  # For testing purposes, hardcoded to wlan0 and wlan1
 
         # 4) debug-log exactly what we found
         if not self.interfaces:
@@ -189,6 +201,7 @@ class HardwareTestApp:
         self.log_message(f"{iface} WiFi connection {'succeeded' if ok else 'failed'}")
         # Verify IP
         passed = ok and self.check_ip(iface)
+        # passed = True
         status = "PASS" if passed else "FAIL"
         self.test_results[iface] = status
         self.log_message(f"{iface}: {status}")
@@ -202,8 +215,16 @@ class HardwareTestApp:
         if not self.interfaces:
             messagebox.showwarning("No Adapters", "No MT7601U adapters found.")
             return
+        # reset progress bar
+        total = len(self.interfaces)
+        self.progress.config(maximum=total)
+        self.progress_var.set(0)
+
         for iface in self.interfaces:
             self.test_interface(iface)
+            # advance progress bar immediately
+            self.progress_var.set(self.progress_var.get() + 1)
+            self.root.update_idletasks()        # ensure bar moves in real time
 
     def save_results(self):
         messagebox.showinfo("Saved", f"Results saved to {REPORT_FILE}")

@@ -81,28 +81,38 @@ class HardwareTestApp:
         self.log.config(state=tk.DISABLED)
 
     def refresh_interfaces(self):
-        # Detect MT7601U interfaces
+        # 1) Detect and log all net-subsystem devices
+        self.log_message("🔄 Refreshing interfaces…")
         context = pyudev.Context()
         net_devs = context.list_devices(subsystem="net")
+        net_devs = list(net_devs)  # consume iterator for length & reuse
+        self.log_message(f"Found {len(net_devs)} network devices")
+
+        # 2) Inspect each and filter by USB vendor/product
         ifaces = []
         for dev in net_devs:
-            parent = dev.find_parent('usb', 'usb_device')
-            print(f"Device: {dev.sys_name}, Parent: {parent}")
-            if parent and parent.get('ID_VENDOR_ID') == '148f' and parent.get('ID_MODEL_ID') == '7601':
+            props = dict(dev.properties)
+            self.log_message(f"Device {dev.sys_name}: subsystem={dev.subsystem}, properties={props}")  # :contentReference[oaicite:5]{index=5}
+
+            parent = dev.find_parent('usb')  # catch usb_device or usb_interface :contentReference[oaicite:6]{index=6}
+            if parent:
+                pprops = dict(parent.properties)
+                self.log_message(f" ↳ USB parent: devtype={parent.device_type}, properties={pprops}")
+            else:
+                self.log_message(" ↳ No USB parent found")
+
+            vid = parent and parent.get('ID_VENDOR_ID')
+            pid = parent and parent.get('ID_MODEL_ID')
+            if vid == '148f' and pid == '7601':
+                self.log_message(f" ✓ {dev.sys_name} matches MT7601U (VID:PID={vid}:{pid})")
                 ifaces.append(dev.sys_name)
+            else:
+                self.log_message(f" ✗ Skipped {dev.sys_name} (VID:PID={vid}:{pid})")
+
+        # 3) Store and log final result
         self.interfaces = ifaces
+        self.log_message(f"Final interfaces: {self.interfaces}")
 
-        # Clear old buttons
-        for w in self.left_frame.winfo_children():
-            if isinstance(w, tk.Button):
-                w.destroy()
-
-        # Create button per interface
-        for iface in self.interfaces:
-            btn = tk.Button(self.left_frame, text=iface, width=15,
-                            command=lambda i=iface: self.test_interface(i))
-            btn.pack(pady=2)
-            self.buttons[iface] = btn
 
     def reset_tests(self):
         """Reset all tests for the next device."""

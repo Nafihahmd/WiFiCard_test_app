@@ -138,11 +138,20 @@ class HardwareTestApp:
     
     def show_help(self):
         """Display help information."""
-        messagebox.showinfo("Help", "This application conducts hardware tests via serial port.\n\n"
-                             "• Use the File menu to open/save results and configure parameters.\n"
-                             "• Use the buttons on the left to run tests.\n"
-                             "• For tests requiring manual input, use the Pass/Fail buttons on the right.\n"
-                             "• Use the Reconnect button to manually recheck the serial connection.")
+        messagebox.showinfo(
+            "Help",  # Title in title case, no end punctuation
+            "This application tests USB-connected MT7601U Wi-Fi adapters by connecting each to a configured network and verifying IP assignment.\n\n"  # Sentence style, explains purpose clearly :contentReference[oaicite:1]{index=1}
+            "• File → Open Results: load a previously saved Excel log.\n"             # Imperative verb, concise
+            "• File → Save Results: write current test outcomes to the report file.\n"  # Imperative verb, consistent style
+            "• Configure: set Wi-Fi SSID, password, and serial-port parameters.\n"       # Noun phrase, action is obvious
+            "• Run Tests: detect all connected adapters, attempt connections, and check for IPs.\n"  # Descriptive, accurate
+            "• Progress bar: shows live count of completed tests; updates in real time.\n"         # Body text supports title, secondary detail
+            "• Logs: view step-by-step status in the text area for troubleshooting.\n"               # Avoids technical jargon, tells user where to look
+            "• Adapter Buttons: click an individual interface to retest a single dongle.\n"           # Consistent with button labels, clear action
+            "• Reconnect: re-scan USB and serial/Wi-Fi interfaces on demand.\n"                      # Explicit label, explains outcome
+            "• Color codes: green=PASS, red=FAIL; results saved automatically to Excel.\n"            # Respects user effort, provides constructive feedback 
+            "• Close this dialog by clicking OK or the × in the corner.\n"                           # Provides visible close option
+        )
 
     def refresh_interfaces(self):
         # 1) announce start

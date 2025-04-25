@@ -1,0 +1,11 @@
+# Bindings to libudev for USB-device enumeration
+pyudev==0.24.3        # latest stable release as of May 10, 2024 :contentReference[oaicite:0]{index=0}
+
+# Portable network-interface lookup (ifaddresses, interfaces)
+netifaces==0.11.0     # latest stable release as of May 31, 2021 :contentReference[oaicite:1]{index=1}
+
+# Excel read/write library
+openpyxl==3.1.5       # latest stable release as of Jun 28, 2024 :contentReference[oaicite:2]{index=2}
+
+# XML-writer dependency used by openpyxl
+et-xmlfile==2.0.0     # latest stable release as of Oct 25, 2024 :contentReference[oaicite:3]{index=3}

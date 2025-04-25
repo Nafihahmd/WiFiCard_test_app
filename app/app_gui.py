@@ -16,8 +16,8 @@ class HardwareTestApp:
         self.root.minsize(800, 600)
 
         # Configurable parameters
-        self.ssid = "Your-SSID"
-        self.password = "Your-Password"
+        self.ssid = "ssid"
+        self.password = "psswd"
 
         # Test data
         self.interfaces = []      # list of iface names
@@ -79,28 +79,8 @@ class HardwareTestApp:
         self.log.insert(tk.END, msg + "\n")
         self.log.see(tk.END)
         self.log.config(state=tk.DISABLED)
-
-    def refresh_interfaces(self):
-        # 1) announce start
-        self.log_message("Refreshing interfaces…")
-
-        # 2) enumerate only 'net' devices that already carry the VID/PID properties
-        ctx = pyudev.Context()
-        # list_devices(**kwargs) forwards to match_subsystem() & match_property() :contentReference[oaicite:4]{index=4}
-        matches = list(ctx.list_devices(
-            subsystem="net",
-            ID_VENDOR_ID="148f",
-            ID_MODEL_ID="7601"
-        ))
-
-        # 3) collect interface names
-        self.interfaces = [dev.sys_name for dev in matches]
-
-        # 4) debug-log exactly what we found
-        if not self.interfaces:
-            self.log_message("No MT7601U interfaces found.")
-        else:
-            self.log_message(f"Found MT7601U interfaces: {self.interfaces}")
+        # Force GUI to update
+        self.root.update_idletasks()
 
     def reset_tests(self):
         """Reset all tests for the next device."""
@@ -123,18 +103,11 @@ class HardwareTestApp:
         password_entry = tk.Entry(window, width=30)
         password_entry.insert(0, self.password)
         password_entry.grid(row=2, column=1, padx=5, pady=5)
-
-        # --- Serial Port field ---
-        tk.Label(window, text="Serial Port:").grid(row=3, column=0, sticky="e", padx=5, pady=5)
-        serial_entry = tk.Entry(window, width=30)
-        serial_entry.insert(0, self.serial_port)
-        serial_entry.grid(row=3, column=1, padx=5, pady=5)
         
         # --- OK Button to save changes ---
         def on_ok():
             self.ssid = ssid_entry.get()
             self.password = password_entry.get()
-            self.serial_port = serial_entry.get()
             # Optionally, you can show a message box or log the changes
             # For example:
             # messagebox.showinfo("Parameters Set",
@@ -144,7 +117,7 @@ class HardwareTestApp:
             #                     f"Model Number: {self.model_number}")
             window.destroy()
 
-        tk.Button(window, text="OK", command=on_ok).grid(row=4, column=0, columnspan=2, pady=10)
+        tk.Button(window, text="OK", command=on_ok).grid(row=3, column=0, columnspan=2, pady=10)
         
         # Update window to ensure its size is computed.
         window.update_idletasks()
@@ -171,10 +144,33 @@ class HardwareTestApp:
                              "• For tests requiring manual input, use the Pass/Fail buttons on the right.\n"
                              "• Use the Reconnect button to manually recheck the serial connection.")
 
+    def refresh_interfaces(self):
+        # 1) announce start
+        self.log_message("Refreshing interfaces…")
+
+        # 2) enumerate only 'net' devices that already carry the VID/PID properties
+        ctx = pyudev.Context()
+        # list_devices(**kwargs) forwards to match_subsystem() & match_property() :contentReference[oaicite:4]{index=4}
+        matches = list(ctx.list_devices(
+            subsystem="net",
+            ID_VENDOR_ID="148f",
+            ID_MODEL_ID="7601"
+        ))
+
+        # 3) collect interface names
+        self.interfaces = [dev.sys_name for dev in matches]
+
+        # 4) debug-log exactly what we found
+        if not self.interfaces:
+            self.log_message("No MT7601U interfaces found.")
+        else:
+            self.log_message(f"Found {len(self.interfaces)} WiFi devices: {self.interfaces}")
+
     def test_interface(self, iface):
         self.log_message(f"Testing {iface}...")
         # Connect
         ok = self.connect_wifi(iface, self.ssid, self.password)
+        self.log_message(f"{iface} WiFi connection {'succeeded' if ok else 'failed'}")
         # Verify IP
         passed = ok and self.check_ip(iface)
         status = "PASS" if passed else "FAIL"
@@ -182,10 +178,11 @@ class HardwareTestApp:
         self.log_message(f"{iface}: {status}")
         append_result(self.get_mac(iface), status)
         # Update button color
-        color = "green" if passed else "red"
-        self.buttons[iface].config(bg=color)
+        #color = "green" if passed else "red"
+        #self.buttons[iface].config(bg=color)
 
     def run_all_tests(self):
+        self.refresh_interfaces()
         if not self.interfaces:
             messagebox.showwarning("No Adapters", "No MT7601U adapters found.")
             return

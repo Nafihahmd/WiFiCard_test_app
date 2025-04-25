@@ -81,8 +81,14 @@ class HardwareTestApp:
         self.log.config(state=tk.DISABLED)
         # Force GUI to update
         self.root.update_idletasks()
+    
+    def clear_log(self):
+        self.log.configure(state=tk.NORMAL)
+        self.log.delete("1.0", tk.END)
+        self.log.configure(state=tk.DISABLED)
 
     def reset_tests(self):
+        self.clear_log()
         """Reset all tests for the next device."""
 
     def configure_parameters(self):
@@ -154,7 +160,7 @@ class HardwareTestApp:
         )
 
     def refresh_interfaces(self):
-        # 1) announce start
+        self.clear_log()
         self.log_message("Refreshing interfaces…")
 
         # 2) enumerate only 'net' devices that already carry the VID/PID properties
@@ -167,7 +173,8 @@ class HardwareTestApp:
         ))
 
         # 3) collect interface names
-        self.interfaces = [dev.sys_name for dev in matches]
+        # self.interfaces = [dev.sys_name for dev in matches]
+        self.interfaces = ['wlan0', 'wlan1']  # For testing purposes, hardcoded to wlan0 and wlan1  
 
         # 4) debug-log exactly what we found
         if not self.interfaces:

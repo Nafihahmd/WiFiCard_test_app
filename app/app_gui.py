@@ -290,7 +290,8 @@ class HardwareTestApp:
 
         for iface in self.interfaces:
             self.test_interface(iface)
-            time.sleep(1)  # Simulate time taken for each test
+            if TESTING_ENABLED:
+                time.sleep(1)  # Simulate time taken for each test
             # advance progress bar immediately
             self.progress_var.set(self.progress_var.get() + 1)
             self.root.update_idletasks()        # ensure bar moves in real time
@@ -305,7 +306,8 @@ class HardwareTestApp:
         if messagebox.askyesno("Save Results", "All devices tested. Do you want to save the results?"):
             self.save_results()
     if TESTING_ENABLED:
-        def random_mac(self):
+        @staticmethod
+        def random_mac():
             # Locally administered unicast: set top-byte to 0x02
             mac = [
                 0x02,

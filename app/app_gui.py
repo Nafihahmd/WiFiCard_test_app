@@ -1,12 +1,14 @@
 import os
 import tkinter as tk
 from tkinter import Menu, messagebox
+import tkinter.font as tkFont
 import pyudev
 import subprocess
 import netifaces
 from openpyxl import Workbook, load_workbook
 from datetime import datetime
 from tkinter import ttk
+import time # For testing purposes, simulate connection time
 
 REPORT_FILE = "wifi_test_results.xlsx"
 
@@ -24,6 +26,7 @@ class HardwareTestApp:
         self.interfaces = []      # list of iface names
         self.test_results = {}    # iface -> "PASS"/"FAIL"
         self.buttons = {}         # iface -> Button widget
+        self.test_buttons = {}    # iface -> Test Button widget
 
         self.create_menu()
         self.create_widgets()
@@ -57,11 +60,21 @@ class HardwareTestApp:
     def create_widgets(self):
         main = tk.Frame(self.root)
         main.pack(fill=tk.BOTH, expand=True)
+        heading_font = tkFont.Font(family="Helvetica", size=11, weight="normal")
 
         # Left pane for interface buttons
         left = tk.Frame(main, bd=2, relief=tk.SUNKEN)
         left.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=5)
-        tk.Label(left, text="Detected Adapters").pack()
+        lbl = tk.Label(
+            left,
+            pady=3,
+            text="Detected Devices",
+            font=heading_font,
+            bg="#e0e0e0",        # subtle background
+            bd=1,                # 1-pixel border
+            relief=tk.SOLID       # solid border style
+        )
+        lbl.pack(fill=tk.X, pady=(0,10), padx=0)  # space below the heading 
         self.left_frame = left
 
         # Right pane for logs
@@ -82,7 +95,7 @@ class HardwareTestApp:
         self.progress.pack(fill=tk.X, padx=5, pady=5)
 
         # Run Tests button
-        self.run_button = tk.Button(self.root, text="Run Tests", command=self.run_all_tests)
+        self.run_button = tk.Button(self.root, text="Test All", command=self.run_all_tests)
         self.run_button.pack(pady=5)
 
     def log_message(self, msg):
@@ -186,13 +199,29 @@ class HardwareTestApp:
 
         # 3) collect interface names
         self.interfaces = [dev.sys_name for dev in matches]
-        # self.interfaces = ['wlan0', 'wlan1']  # For testing purposes, hardcoded to wlan0 and wlan1
+        # self.interfaces = ['wlan0', 'wlan1']  # For testing purposes, hardcoded to wlan0 and wlan1 
 
         # 4) debug-log exactly what we found
         if not self.interfaces:
             self.log_message("No MT7601U interfaces found.")
         else:
             self.log_message(f"Found {len(self.interfaces)} WiFi devices: {self.interfaces}")
+
+        # Clear old buttons
+        for widget in self.left_frame.winfo_children():
+            if isinstance(widget, tk.Button):
+                widget.destroy()
+
+        # Create one button per interface
+        for iface in self.interfaces:
+            btn = tk.Button(
+                self.left_frame,
+                text=iface,
+                width=15,
+                command=lambda i=iface: self.test_interface(i)  # bind current iface
+            )
+            btn.pack(pady=2)
+            self.test_buttons[iface] = btn
 
     def test_interface(self, iface):
         self.log_message(f"Testing {iface}...")
@@ -201,6 +230,7 @@ class HardwareTestApp:
         self.log_message(f"{iface} WiFi connection {'succeeded' if ok else 'failed'}")
         # Verify IP
         passed = ok and self.check_ip(iface)
+        # time.sleep(2)  # Simulate connection time 
         # passed = True
         status = "PASS" if passed else "FAIL"
         self.test_results[iface] = status
@@ -222,6 +252,7 @@ class HardwareTestApp:
 
         for iface in self.interfaces:
             self.test_interface(iface)
+            # time.sleep(1)  # Simulate time taken for each test
             # advance progress bar immediately
             self.progress_var.set(self.progress_var.get() + 1)
             self.root.update_idletasks()        # ensure bar moves in real time

@@ -8,7 +8,11 @@ import netifaces
 from openpyxl import Workbook, load_workbook
 from datetime import datetime
 from tkinter import ttk
-import time # For testing purposes, simulate connection time
+
+TESTING_ENABLED = True   # ← flip to False to disable all tests
+if TESTING_ENABLED:
+    import random
+    import time # For testing purposes, simulate connection time
 
 REPORT_FILE = "wifi_test_results.xlsx"
 
@@ -209,8 +213,10 @@ class HardwareTestApp:
         ))
 
         # 3) collect interface names
-        self.interfaces = [dev.sys_name for dev in matches]
-        # self.interfaces = ['wlan0', 'wlan1']  # For testing purposes, hardcoded to wlan0 and wlan1 
+        if TESTING_ENABLED:
+            self.interfaces = ['wlan0', 'wlan1']  # For testing purposes, hardcoded to wlan0 and wlan1
+        else:
+            self.interfaces = [dev.sys_name for dev in matches]
 
         # 4) debug-log exactly what we found
         if not self.interfaces:
@@ -239,16 +245,18 @@ class HardwareTestApp:
     def test_interface(self, iface):
         self.log_message(f"Testing {iface}...")
         # Connect
-        ok = self.connect_wifi(iface, self.ssid, self.password)
-        self.log_message(f"{iface} WiFi connection {'succeeded' if ok else 'failed'}")
-        # Verify IP
-        passed = ok and self.check_ip(iface)
-        # time.sleep(2)  # Simulate connection time 
-        # passed = True
+        if not TESTING_ENABLED:
+            ok = self.connect_wifi(iface, self.ssid, self.password)
+            self.log_message(f"{iface} WiFi connection {'succeeded' if ok else 'failed'}")
+            # Verify IP
+            passed = ok and self.check_ip(iface)
+        else:
+            time.sleep(2)  # Simulate connection time 
+            passed = True
         status = "PASS" if passed else "FAIL"
         self.test_results[iface] = status
         self.log_message(f"{iface}: {status}")
-        append_result(self.get_mac(iface), status)
+        append_result(self.get_mac(self, iface), status)
         # Update button color
         #color = "green" if passed else "red"
         #self.buttons[iface].config(bg=color)
@@ -265,13 +273,32 @@ class HardwareTestApp:
 
         for iface in self.interfaces:
             self.test_interface(iface)
-            # time.sleep(1)  # Simulate time taken for each test
+            time.sleep(1)  # Simulate time taken for each test
             # advance progress bar immediately
             self.progress_var.set(self.progress_var.get() + 1)
             self.root.update_idletasks()        # ensure bar moves in real time
 
+        self.prompt_save_results()  # ask to save results after all tests
+            
     def save_results(self):
         messagebox.showinfo("Saved", f"Results saved to {REPORT_FILE}")
+    
+    def prompt_save_results(self):
+        """Prompt the user to save test results once all tests are completed."""
+        if messagebox.askyesno("Save Results", "All devices tested. Do you want to save the results?"):
+            self.save_results()
+    if TESTING_ENABLED:
+        def random_mac(self):
+            # Locally administered unicast: set top-byte to 0x02
+            mac = [
+                0x02,
+                0x00,
+                0x00,
+                random.randint(0x00, 0xFF),
+                random.randint(0x00, 0xFF),
+                random.randint(0x00, 0xFF)
+            ]
+            return ":".join(f"{b:02x}" for b in mac)
 
     @staticmethod
     def connect_wifi(iface, ssid, password):
@@ -292,9 +319,13 @@ class HardwareTestApp:
         return netifaces.AF_INET in addrs and bool(addrs[netifaces.AF_INET])
 
     @staticmethod
-    def get_mac(iface):
-        addrs = netifaces.ifaddresses(iface)
-        link = addrs.get(netifaces.AF_LINK)
+    def get_mac(self, iface):
+        if TESTING_ENABLED:
+            addrs = self.random_mac()
+            return addrs
+        else:
+            addrs = netifaces.ifaddresses(iface)
+            link = addrs.get(netifaces.AF_LINK)
         return link[0]['addr'] if link else "Unknown"
 
 def initialize_workbook():

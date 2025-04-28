@@ -91,6 +91,19 @@ class HardwareTestApp:
         # draw circle centered in that 16×16
         self.led_dot = self.led.create_oval(6,6,20,20, fill="red")   # default red
         self.led.pack(side=tk.RIGHT)
+        # Sub‐frame that will contain only the dynamic interface buttons
+        self.iface_frame = tk.Frame(self.left_frame)
+        self.iface_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=(0,10))
+
+        # -- Rescan button ----------------
+        self.rescan_btn = tk.Button(
+            self.left_frame,
+            text="Rescan",
+            command=self.refresh_interfaces,
+            width=15
+        )
+        # pack at bottom, with padding
+        self.rescan_btn.pack(side=tk.BOTTOM, pady=10, padx=5)
 
         # Right pane for logs
         right = tk.Frame(main, bd=2, relief=tk.SUNKEN)
@@ -198,6 +211,11 @@ class HardwareTestApp:
             "• Color codes: green=PASS, red=FAIL; results saved automatically to Excel.\n"            # Respects user effort, provides constructive feedback 
             "• Close this dialog by clicking OK or the × in the corner.\n"                           # Provides visible close option
         )
+    def rescan_interfaces(self):
+        self.log_message("Rescanning interfaces…")
+        self.reset_tests()
+        self.refresh_interfaces()
+        self.log_message("Rescan complete.")
 
     def refresh_interfaces(self):
         self.clear_log()
@@ -227,14 +245,13 @@ class HardwareTestApp:
             self.led.itemconfig(self.led_dot, fill="green")  # green
 
         # Clear old buttons
-        for widget in self.left_frame.winfo_children():
-            if isinstance(widget, tk.Button):
-                widget.destroy()
+        for widget in self.iface_frame.winfo_children():
+            widget.destroy()
 
         # Create one button per interface
         for iface in self.interfaces:
             btn = tk.Button(
-                self.left_frame,
+                self.iface_frame,
                 text=iface,
                 width=15,
                 command=lambda i=iface: self.test_interface(i)  # bind current iface

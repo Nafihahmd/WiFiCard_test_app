@@ -65,17 +65,28 @@ class HardwareTestApp:
         # Left pane for interface buttons
         left = tk.Frame(main, bd=2, relief=tk.SUNKEN)
         left.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=5)
-        lbl = tk.Label(
-            left,
-            pady=3,
-            text="Detected Devices",
-            font=heading_font,
-            bg="#e0e0e0",        # subtle background
-            bd=1,                # 1-pixel border
-            relief=tk.SOLID       # solid border style
-        )
-        lbl.pack(fill=tk.X, pady=(0,10), padx=0)  # space below the heading 
         self.left_frame = left
+
+        # -- Heading + LED indicator canvas ------------------
+        header_frame = tk.Frame(self.left_frame)
+        header_frame.pack(fill=tk.X, pady=(0,10), padx=0)
+
+        lbl = tk.Label(
+            header_frame,
+            text="Detected Devices",
+            pady=5,
+            font=heading_font,
+            bg="#e0e0e0", bd=1, relief=tk.SOLID
+        )
+        lbl.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        # LED: tiny canvas for colored dot
+        self.led = tk.Canvas(
+            header_frame, width=25, height=25, highlightthickness=0, 
+            bg="#e0e0e0", bd=1, relief=tk.SOLID)
+        # draw circle centered in that 16×16
+        self.led_dot = self.led.create_oval(6,6,20,20, fill="red")   # default red
+        self.led.pack(side=tk.RIGHT)
 
         # Right pane for logs
         right = tk.Frame(main, bd=2, relief=tk.SUNKEN)
@@ -204,8 +215,10 @@ class HardwareTestApp:
         # 4) debug-log exactly what we found
         if not self.interfaces:
             self.log_message("No MT7601U interfaces found.")
+            self.led.itemconfig(self.led_dot, fill="red")  # red
         else:
             self.log_message(f"Found {len(self.interfaces)} WiFi devices: {self.interfaces}")
+            self.led.itemconfig(self.led_dot, fill="green")  # green
 
         # Clear old buttons
         for widget in self.left_frame.winfo_children():

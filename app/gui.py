@@ -1,20 +1,23 @@
-import os
-import tkinter as tk
-from tkinter import Menu, messagebox
-import tkinter.font as tkFont
-import pyudev
-import subprocess
-import netifaces
-from openpyxl import Workbook, load_workbook
-from datetime import datetime
-from tkinter import ttk
+"""Tkinter GUI for orchestrating Wi-Fi adapter tests and displaying results.
 
-TESTING_ENABLED = True   # ← flip to False to disable all tests
+This application:
+  * Scans for MT7601U mPCIe Wi-Fi adapters.
+  * Allows per-adapter or batch testing (connect + IP check).
+  * Displays real-time logs, progress bar, and LED status.
+  * Saves results to an Excel workbook via test_engine API.
+"""
+
+import tkinter as tk
+from tkinter import Menu, messagebox, ttk
+import tkinter.font as tkFont
+import test_engine        # engine module
+from test_engine import scan_interfaces, connect_wifi, check_ip, get_mac, random_mac
+from excel_writer import append_result
+
+TESTING_ENABLED = True   # ← flip to False to disable result simulation
 if TESTING_ENABLED:
     import random
     import time # For testing purposes, simulate connection time
-
-REPORT_FILE = "wifi_test_results.xlsx"
 
 class HardwareTestApp:
     def __init__(self, root):
@@ -27,10 +30,10 @@ class HardwareTestApp:
         self.password = "psswd"
 
         # Test data
-        self.interfaces = []      # list of iface names
+        self.interfaces = []      # list of interface names
         self.test_results = {}    # iface -> "PASS"/"FAIL"
         self.buttons = {}         # iface -> Button widget
-        self.test_buttons = {}    # iface -> Test Button widget
+        self.iface_buttons = {}    # iface -> Interface button widget
 
         self.create_menu()
         self.create_widgets()
@@ -42,7 +45,7 @@ class HardwareTestApp:
         
         # File menu
         file_menu = Menu(menu_bar, tearoff=0)
-        file_menu.add_command(label="Save Results", command=self.save_results)
+        file_menu.add_command(label="Save Results", command=self.prompt_save_results)
         file_menu.add_separator()
         file_menu.add_command(label="Reset", command=self.reset_tests)
         file_menu.add_command(label="Exit", command=self.root.quit)
@@ -211,6 +214,7 @@ class HardwareTestApp:
             "• Color codes: green=PASS, red=FAIL; results saved automatically to Excel.\n"            # Respects user effort, provides constructive feedback 
             "• Close this dialog by clicking OK or the × in the corner.\n"                           # Provides visible close option
         )
+
     def rescan_interfaces(self):
         self.log_message("Rescanning interfaces…")
         self.reset_tests()
@@ -221,20 +225,11 @@ class HardwareTestApp:
         self.clear_log()
         self.log_message("Refreshing interfaces…")
 
-        # 2) enumerate only 'net' devices that already carry the VID/PID properties
-        ctx = pyudev.Context()
-        # list_devices(**kwargs) forwards to match_subsystem() & match_property() :contentReference[oaicite:4]{index=4}
-        matches = list(ctx.list_devices(
-            subsystem="net",
-            ID_VENDOR_ID="148f",
-            ID_MODEL_ID="7601"
-        ))
-
-        # 3) collect interface names
+        # collect interface names
         if TESTING_ENABLED:
             self.interfaces = ['wlan0', 'wlan1']  # For testing purposes, hardcoded to wlan0 and wlan1
         else:
-            self.interfaces = [dev.sys_name for dev in matches]
+            self.interfaces = scan_interfaces()
 
         # 4) debug-log exactly what we found
         if not self.interfaces:
@@ -257,23 +252,27 @@ class HardwareTestApp:
                 command=lambda i=iface: self.test_interface(i)  # bind current iface
             )
             btn.pack(pady=2)
-            self.test_buttons[iface] = btn
+            self.iface_buttons[iface] = btn
 
     def test_interface(self, iface):
         self.log_message(f"Testing {iface}...")
         # Connect
         if not TESTING_ENABLED:
-            ok = self.connect_wifi(iface, self.ssid, self.password)
+            ok = connect_wifi(iface, self.ssid, self.password)
             self.log_message(f"{iface} WiFi connection {'succeeded' if ok else 'failed'}")
             # Verify IP
-            passed = ok and self.check_ip(iface)
+            passed = ok and check_ip(iface)
         else:
             time.sleep(2)  # Simulate connection time 
             passed = True
         status = "PASS" if passed else "FAIL"
         self.test_results[iface] = status
         self.log_message(f"{iface}: {status}")
-        append_result(self.get_mac(self, iface), status)
+        if TESTING_ENABLED:
+            # Simulate result saving
+            append_result(random_mac(), status)
+        else:
+            append_result(get_mac(iface), status)
         # Update button color
         #color = "green" if passed else "red"
         #self.buttons[iface].config(bg=color)
@@ -298,73 +297,14 @@ class HardwareTestApp:
 
         self.prompt_save_results()  # ask to save results after all tests
             
-    def save_results(self):
-        messagebox.showinfo("Saved", f"Results saved to {REPORT_FILE}")
     
     def prompt_save_results(self):
         """Prompt the user to save test results once all tests are completed."""
         if messagebox.askyesno("Save Results", "All devices tested. Do you want to save the results?"):
-            self.save_results()
-    if TESTING_ENABLED:
-        @staticmethod
-        def random_mac():
-            # Locally administered unicast: set top-byte to 0x02
-            mac = [
-                0x02,
-                0x00,
-                0x00,
-                random.randint(0x00, 0xFF),
-                random.randint(0x00, 0xFF),
-                random.randint(0x00, 0xFF)
-            ]
-            return ":".join(f"{b:02x}" for b in mac)
+            pass
 
-    @staticmethod
-    def connect_wifi(iface, ssid, password):
-        try:
-            subprocess.run(["nmcli", "radio", "wifi", "on"], check=True)
-            subprocess.run(["nmcli", "device", "wifi", "rescan"], check=True)
-            subprocess.run(
-                ["nmcli", "device", "wifi", "connect", ssid, "password", password, "ifname", iface],
-                check=True, timeout=20
-            )
-            return True
-        except subprocess.SubprocessError:
-            return False
-
-    @staticmethod
-    def check_ip(iface):
-        addrs = netifaces.ifaddresses(iface)
-        return netifaces.AF_INET in addrs and bool(addrs[netifaces.AF_INET])
-
-    @staticmethod
-    def get_mac(self, iface):
-        if TESTING_ENABLED:
-            addrs = self.random_mac()
-            return addrs
-        else:
-            addrs = netifaces.ifaddresses(iface)
-            link = addrs.get(netifaces.AF_LINK)
-        return link[0]['addr'] if link else "Unknown"
-
-def initialize_workbook():
-    if not os.path.exists(REPORT_FILE):
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "TestResults"
-        ws.append(["Timestamp", "MAC Address", "Status"])
-        wb.save(REPORT_FILE)
-
-def append_result(mac, status):
-    initialize_workbook()
-    wb = load_workbook(REPORT_FILE)
-    ws = wb.active
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    ws.append([ts, mac, status])
-    wb.save(REPORT_FILE)
 
 if __name__ == "__main__":
-    initialize_workbook()
     root = tk.Tk()
     app = HardwareTestApp(root)
     root.mainloop()

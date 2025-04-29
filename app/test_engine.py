@@ -1,15 +1,11 @@
-"""Engine for scanning Wi-Fi adapters, connecting to networks, and logging results.
+"""Engine for scanning Wi-Fi adapters, and connecting to networks.
 
 This module provides functions to:
-  * Initialize or load the Excel report workbook.
-  * Append timestamped test results (MAC, status) to the workbook.
   * Scan for USB-attached MT7601U Wi-Fi interfaces.
   * Connect a given interface to a configured SSID/password.
   * Verify that an interface has been assigned an IPv4 address.
 
 Public API:
-    initialize_workbook
-    append_result
     scan_interfaces
     connect_wifi
     check_ip

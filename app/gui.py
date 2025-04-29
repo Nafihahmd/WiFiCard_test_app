@@ -229,7 +229,7 @@ class HardwareTestApp:
         else:
             self.interfaces = scan_interfaces()
 
-        # 4) debug-log exactly what we found
+        # debug-log exactly what we found
         if not self.interfaces:
             self.log_message("No MT7601U interfaces found.")
             self.led.itemconfig(self.led_dot, fill="red")  # red
@@ -250,7 +250,8 @@ class HardwareTestApp:
                 command=lambda i=iface: self.test_interface(i)  # bind current iface
             )
             btn.pack(pady=2)
-            self.iface_buttons[iface] = btn
+            self.iface_buttons[iface] = btn            
+            self.test_results[iface] = "Pending" # initialize status
 
     def test_interface(self, iface):
         self.log_message(f"Testing {iface}...")
@@ -266,14 +267,14 @@ class HardwareTestApp:
         status = "PASS" if passed else "FAIL"
         self.test_results[iface] = status
         self.log_message(f"{iface}: {status}")
-        if TESTING_ENABLED:
-            # Simulate result saving
-            append_result(random_mac(), status)
-        else:
-            append_result(get_mac(iface), status)
+        
         # Update button color
         color = "lightgreen" if passed else "red"
         self.iface_buttons[iface].config(bg=color)
+
+        # If all tests have finished, prompt to save results.        
+        if all(status in ("PASS","FAIL") for status in self.test_results.values()):
+            self.prompt_save_results()
 
     def run_all_tests(self):
         self.refresh_interfaces()
@@ -291,16 +292,15 @@ class HardwareTestApp:
                 time.sleep(1)  # Simulate time taken for each test
             # advance progress bar immediately
             self.progress_var.set(self.progress_var.get() + 1)
-            self.root.update_idletasks()        # ensure bar moves in real time
-
-        self.prompt_save_results()  # ask to save results after all tests
-            
+            self.root.update_idletasks()        # ensure bar moves in real time            
     
     def prompt_save_results(self):
         """Prompt the user to save test results once all tests are completed."""
         if messagebox.askyesno("Save Results", "All devices tested. Do you want to save the results?"):
-            pass
-
+            for i in self.interfaces:
+                status = self.test_results.get(i, "Unknown")
+                mac = get_mac(i) if not TESTING_ENABLED else random_mac()
+                append_result(mac, status)
 
 if __name__ == "__main__":
     root = tk.Tk()

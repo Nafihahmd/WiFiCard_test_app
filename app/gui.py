@@ -16,7 +16,6 @@ from excel_writer import append_result
 
 TESTING_ENABLED = True   # ← flip to False to disable result simulation
 if TESTING_ENABLED:
-    import random
     import time # For testing purposes, simulate connection time
 
 class HardwareTestApp:
@@ -274,8 +273,8 @@ class HardwareTestApp:
         else:
             append_result(get_mac(iface), status)
         # Update button color
-        #color = "green" if passed else "red"
-        #self.buttons[iface].config(bg=color)
+        color = "lightgreen" if passed else "red"
+        self.iface_buttons[iface].config(bg=color)
 
     def run_all_tests(self):
         self.refresh_interfaces()

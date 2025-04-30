@@ -26,7 +26,10 @@ class HardwareTestApp:
 
         # Configurable parameters
         self.ssid = "ssid"
-        self.password = "psswd"
+        self.password = "password"
+        self.show_progress_bar = False    # whether to display the progress bar
+        self.auto_save_enabled = False   # whether to save results without prompting
+        self.simulate_result = True # whether to enable result simulation 
 
         # Test data
         self.interfaces = []      # list of interface names
@@ -122,7 +125,10 @@ class HardwareTestApp:
             maximum=1,            # will reset later to number of interfaces
             mode='determinate',   # shows exact progress
         )
-        self.progress.pack(fill=tk.X, padx=5, pady=5)
+        if self.show_progress_bar:
+            self.progress.pack(fill=tk.X, padx=5, pady=5)
+        else:
+            self.progress.pack_forget()
 
         # Run Tests button
         self.run_button = tk.Button(self.root, text="Test All", command=self.run_all_tests)
@@ -164,11 +170,33 @@ class HardwareTestApp:
         password_entry = tk.Entry(window, width=30)
         password_entry.insert(0, self.password)
         password_entry.grid(row=2, column=1, padx=5, pady=5)
+
+        # create a container frame in dialog
+        opts_frame = tk.Frame(window)
+        opts_frame.grid(row=3, column=0, columnspan=2, sticky="w", padx=5, pady=5)
+
+        # --- Progress Bar Checkbox ---
+        show_progress_var = tk.BooleanVar(value=self.show_progress_bar)
+        progress_cb = tk.Checkbutton(opts_frame, text="Progress Bar", variable=show_progress_var)
+        progress_cb.grid(row=3, column=1, sticky="w", padx=5, pady=5)
+
+        # --- Auto-Save Checkbox ---
+        auto_save_var = tk.BooleanVar(value=self.auto_save_enabled)
+        auto_save_cb = tk.Checkbutton(opts_frame, text="Auto-Save", variable=auto_save_var)
+        auto_save_cb.grid(row=3, column=2, sticky="w", padx=5, pady=5)
+
+        # --- Auto-Save Checkbox ---
+        sim_rslt_var = tk.BooleanVar(value=self.simulate_result)
+        sim_rslt_cb = tk.Checkbutton(opts_frame, text="Result Simulation", variable=sim_rslt_var)
+        sim_rslt_cb.grid(row=4, column=1, sticky="w", padx=5, pady=5)
         
         # --- OK Button to save changes ---
         def on_ok():
             self.ssid = ssid_entry.get()
             self.password = password_entry.get()
+            self.show_progress_bar = show_progress_var.get()
+            self.auto_save_enabled = auto_save_var.get()
+            self.simulate_result = sim_rslt_var.get()
             # Optionally, you can show a message box or log the changes
             # For example:
             # messagebox.showinfo("Parameters Set",
@@ -176,9 +204,10 @@ class HardwareTestApp:
             #                     f"IP Address: {self.server_ip}\n"
             #                     f"Serial Port: {self.serial_port}\n"
             #                     f"Model Number: {self.model_number}")
+            self.update_widgets()  # Update the main window with new settings
             window.destroy()
 
-        tk.Button(window, text="OK", command=on_ok).grid(row=3, column=0, columnspan=2, pady=10)
+        tk.Button(window, text="OK", command=on_ok).grid(row=5, column=0, columnspan=2, pady=10)
         
         # Update window to ensure its size is computed.
         window.update_idletasks()
@@ -224,7 +253,7 @@ class HardwareTestApp:
         self.log_message("Refreshing interfaces…")
 
         # collect interface names
-        if TESTING_ENABLED:
+        if self.simulate_result:
             self.interfaces = ['wlan0', 'wlan1']  # For testing purposes, hardcoded to wlan0 and wlan1
         else:
             self.interfaces = scan_interfaces()
@@ -256,7 +285,7 @@ class HardwareTestApp:
     def test_interface(self, iface):
         self.log_message(f"Testing {iface}...")
         # Connect
-        if not TESTING_ENABLED:
+        if not self.simulate_result:
             ok = connect_wifi(iface, self.ssid, self.password)
             self.log_message(f"{iface} WiFi connection {'succeeded' if ok else 'failed'}")
             # Verify IP
@@ -274,7 +303,10 @@ class HardwareTestApp:
 
         # If all tests have finished, prompt to save results.        
         if all(status in ("PASS","FAIL") for status in self.test_results.values()):
-            self.prompt_save_results()
+            if self.auto_save_enabled:
+                self.save_results()
+            else:
+                self.prompt_save_results()
 
     def run_all_tests(self):
         self.refresh_interfaces()
@@ -288,19 +320,35 @@ class HardwareTestApp:
 
         for iface in self.interfaces:
             self.test_interface(iface)
-            if TESTING_ENABLED:
+            if self.simulate_result:
                 time.sleep(1)  # Simulate time taken for each test
             # advance progress bar immediately
             self.progress_var.set(self.progress_var.get() + 1)
             self.root.update_idletasks()        # ensure bar moves in real time            
+
+    def update_widgets(self):
+        # Update the interface buttons 
+        self.refresh_interfaces()
+        # Show or hide progress bar based on the setting
+        if self.show_progress_bar:
+            self.progress.pack(fill=tk.X, padx=5, pady=5)
+        else:
+            self.progress.pack_forget()
     
+    def save_results(self):
+        for i in self.interfaces:
+            status = self.test_results.get(i, "Unknown")
+            mac = get_mac(i) if not self.simulate_result else random_mac()
+            append_result(mac, status)
+        
+        if(self.auto_save_enabled):
+            self.log_message("Results saved\n")
+
     def prompt_save_results(self):
         """Prompt the user to save test results once all tests are completed."""
         if messagebox.askyesno("Save Results", "All devices tested. Do you want to save the results?"):
-            for i in self.interfaces:
-                status = self.test_results.get(i, "Unknown")
-                mac = get_mac(i) if not TESTING_ENABLED else random_mac()
-                append_result(mac, status)
+            self.save_results()
+            
 
 if __name__ == "__main__":
     root = tk.Tk()

@@ -14,9 +14,16 @@ import test_engine        # engine module
 from test_engine import scan_interfaces, connect_wifi, check_ip, get_mac, random_mac
 from excel_writer import append_result
 
+import configparser
+from appdirs import user_config_dir
+import os
+
 TESTING_ENABLED = True   # ← flip to False to disable result simulation
 if TESTING_ENABLED:
     import time # For testing purposes, simulate connection time
+# Load configuration
+cfg = configparser.ConfigParser()
+path = os.path.join(user_config_dir("WiFiTestApp","ECSI"), "settings.ini")
 
 class HardwareTestApp:
     def __init__(self, root):
@@ -25,11 +32,14 @@ class HardwareTestApp:
         self.root.minsize(800, 600)
 
         # Configurable parameters
-        self.ssid = "ssid"
-        self.password = "password"
+        self.ssid = ""
+        self.password = ""
         self.show_progress_bar = False    # whether to display the progress bar
         self.auto_save_enabled = False   # whether to save results without prompting
-        self.simulate_result = True # whether to enable result simulation 
+        self.simulate_result = False # whether to enable result simulation 
+        
+        # Load configuration
+        self.load_config()
 
         # Test data
         self.interfaces = []      # list of interface names
@@ -192,11 +202,15 @@ class HardwareTestApp:
         
         # --- OK Button to save changes ---
         def on_ok():
-            self.ssid = ssid_entry.get()
-            self.password = password_entry.get()
-            self.show_progress_bar = show_progress_var.get()
-            self.auto_save_enabled = auto_save_var.get()
-            self.simulate_result = sim_rslt_var.get()
+            cfg["network"]["ssid"] = ssid_entry.get()
+            cfg["network"]["password"] = password_entry.get()
+            cfg["ui"]["show_progress"] = str(show_progress_var.get())
+            cfg["ui"]["auto_save"] = str(auto_save_var.get())
+            cfg["ui"]["simulate_result"] = str(sim_rslt_var.get())
+            with open(path, "w") as f:
+                cfg.write(f)
+
+            self.load_config()
             # Optionally, you can show a message box or log the changes
             # For example:
             # messagebox.showinfo("Parameters Set",
@@ -348,6 +362,23 @@ class HardwareTestApp:
         """Prompt the user to save test results once all tests are completed."""
         if messagebox.askyesno("Save Results", "All devices tested. Do you want to save the results?"):
             self.save_results()
+
+    def load_config(self):
+        # read settings.ini
+        # Load or create defaults
+        if os.path.exists(path):
+            cfg.read(path)
+        else:
+            cfg["network"] = {"ssid": "ssid", "password": "psswd"}
+            cfg["ui"] = {"show_progress": "no", "auto_save": "no", "simulate_result": "no"}
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
+                cfg.write(f)
+        self.ssid = cfg["network"]["ssid"]
+        self.password = cfg["network"]["password"]
+        self.show_progress_bar = cfg.getboolean("ui","show_progress")
+        self.auto_save_enabled = cfg.getboolean("ui","auto_save")
+        self.simulate_result = cfg.getboolean("ui","simulate_result")
             
 
 if __name__ == "__main__":

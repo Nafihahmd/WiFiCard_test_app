@@ -6,3 +6,7 @@ wifi_test_results.xlsx
 venv/
 .venv/
 env/
+build/
+dist/
+py311venv/
+gui.spec

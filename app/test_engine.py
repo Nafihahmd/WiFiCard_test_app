@@ -171,11 +171,19 @@ else:
             logger.error("Error connecting to network")
             return False
 
-    import psutil, socket
+    import psutil, socket, time
     def check_ip(iface):
         try:
-            addrs = psutil.net_if_addrs().get(iface, [])
-            return any(a.family == socket.AF_INET for a in addrs)
+            deadline = time.time() + 5
+            while time.time() < deadline:
+                addrs = psutil.net_if_addrs().get(iface, [])
+                for addr in addrs:
+                    if addr.family == socket.AF_INET:
+                        ip = addr.address
+                        # skip Automatic Private IP Addressing (169.254.x.x)
+                        if not ip.startswith("169.254."):
+                            return True
+                time.sleep(1)
         except ValueError as e:
             logger.error(f"Invalid interface {iface}: {e}")
         except Exception as e:

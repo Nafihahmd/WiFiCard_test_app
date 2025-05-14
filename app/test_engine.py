@@ -13,15 +13,18 @@ Public API:
 import subprocess
 import netifaces
 import sys
+from log import logger
 
 if sys.platform.startswith("linux"):
     # Linux: use pyudev
     import pyudev
+    logger.info("Linux detected, using pyudev for interface scanning.")
     def scan_interfaces(vendor="148f", product="7601"):
         ctx = pyudev.Context()
         devices = ctx.list_devices(subsystem="net",
                                    ID_VENDOR_ID=vendor,
                                    ID_MODEL_ID=product)
+        # logger.info(f"Found {len(devices)} devices matching {vendor}:{product}")
         return [d.sys_name for d in devices]
     
     def connect_wifi(iface, ssid, password, timeout=20):
@@ -32,24 +35,41 @@ if sys.platform.startswith("linux"):
                 ["nmcli","device","wifi","connect", ssid, "password", password, "ifname", iface],
                 check=True, timeout=timeout
             )
+            logger.info(f"Connected to {ssid} on {iface}")
             return True
         except subprocess.SubprocessError:
+            logger.error("Error connecting to network")
             return False
 
     def check_ip(iface):
-        print(f"Checking IP for {iface}")
-        addrs = netifaces.ifaddresses(iface)
-        print(addrs)
-        return netifaces.AF_INET in addrs and bool(addrs[netifaces.AF_INET])
+        try:
+            logger.info(f"Checking IP for {iface}")
+            addrs = netifaces.ifaddresses(iface)
+            logger.info(f"Addresses: {addrs}")
+            return netifaces.AF_INET in addrs and bool(addrs[netifaces.AF_INET])        
+        except ValueError as e:
+            logger.error(f"Invalid interface {iface}: {e}")
+        except Exception as e:
+            logger.exception(f"Unexpected error while checking IP for {iface}: {e}")
+        return False
 
     def get_mac(iface):
-        addrs = netifaces.ifaddresses(iface)
-        link = addrs.get(netifaces.AF_LINK)
-        return link[0]['addr'] if link else "Unknown"
-
+        try:
+            logger.info(f"Getting MAC for {iface}")
+            addrs = netifaces.ifaddresses(iface)
+            link = addrs.get(netifaces.AF_LINK)
+            return link[0]['addr'] if link else "Unknown"
+        except ValueError as e:
+            logger.error(f"Invalid interface {iface}: {e}")
+        except (IndexError, KeyError) as e:
+            logger.error(f"Malformed link data for {iface}: {e}")
+        except Exception as e:
+            logger.exception(f"Unexpected error while getting MAC for {iface}: {e}")
+        return "Unknown"
 else:
     # Windows: attempt WMI import, else stub
     import subprocess, json, sys, tempfile, os
+    logger.info("Windows detected, using PowerShell for interface scanning.")
     def scan_interfaces(vendor="148f", product="7601"):
         ps_cmd = [
              "powershell.exe", "-NoProfile", "-Command",
@@ -67,12 +87,13 @@ else:
                 timeout=10
             )
         except subprocess.SubprocessError as e:
+            logger.error(f"PowerShell command failed: {e}")
             raise RuntimeError(f"PowerShell scan failed: {e}") from e
-
         # parse JSON
         try:
             data = json.loads(result.stdout)
         except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON: {e}\nOutput was: {result.stdout!r}")
             raise RuntimeError(f"Failed to parse JSON: {e}\nOutput was: {result.stdout!r}")
 
         # if only one adapter, PowerShell returns an object, not a list
@@ -81,18 +102,17 @@ else:
         # print(data) # Debugging
         return [nic["Name"] for nic in data if "usb wireless lan card" in nic["InterfaceDescription"].lower()]
     
-    def connect_wifi(iface, ssid, password, timeout=20):
-        
+    def connect_wifi(iface, ssid, password, timeout=20):        
         try:
             # Check if profile already exists
-            print(f"checking for profile {ssid} on {iface}")
+            logger.info(f"checking for profile {ssid} on {iface}")
             res = subprocess.run(
             ["netsh", "wlan", "show", "profiles", f"interface={iface}"],
             capture_output=True, text=True, check=True
         )
             profiles_output = res.stdout.lower()
         except subprocess.SubprocessError:
-            print("Error checking profiles")
+            logger.error("Error checking for existing profiles")
             profiles_output = ""
             
         # Check if the profile already exists
@@ -124,19 +144,19 @@ else:
                     f.write(xml)
                     xml_path = f.name
                 # Add the profile to the system
-                print(f"Adding profile {ssid} to {iface}")
+                logger.info(f"Adding profile {ssid} to {iface}")
                 subprocess.run([
                     "netsh", "wlan", "add", "profile",
                     f'filename={xml_path}', f'interface={iface}', "user=current"
                 ], check=True)
             except subprocess.SubprocessError:
-                print("Error adding profile")
+                logger.error("Error adding profile")
                 return False
             finally:
-                print("Removing temporary XML file")
+                logger.info("Removing temporary XML file")
                 os.remove(xml_path)
         else:
-            print(f"Profile {ssid} already exists on {iface}")
+            logger.info(f"Profile {ssid} already exists on {iface}")
         
         # Connect to the network
         try:
@@ -148,25 +168,39 @@ else:
             print(res)
             return True
         except subprocess.SubprocessError:
-            print("Error connecting to network")
+            logger.error("Error connecting to network")
             return False
 
     import psutil, socket
     def check_ip(iface):
-        addrs = psutil.net_if_addrs().get(iface, [])
-        return any(a.family == socket.AF_INET for a in addrs)
+        try:
+            addrs = psutil.net_if_addrs().get(iface, [])
+            return any(a.family == socket.AF_INET for a in addrs)
+        except ValueError as e:
+            logger.error(f"Invalid interface {iface}: {e}")
+        except Exception as e:
+            logger.exception(f"Unexpected error while checking IP for {iface}: {e}")
+        return False
 
     def get_mac(iface: str) -> str:
         """
         Return the MAC address for the given interface using psutil.
         If the interface does not exist or has no MAC, returns "Unknown".
         """
-        # psutil.net_if_addrs() → { iface_name: [snic(addr, netmask, broadcast, ptp), ...], ... }
-        addrs = psutil.net_if_addrs().get(iface, [])  # dict lookup returns [] if iface missing :contentReference[oaicite:2]{index=2}
-        for snic in addrs:
-            # Each snic has .family, .address, .netmask, .broadcast, .ptp
-            if snic.family == psutil.AF_LINK:           # AF_LINK identifies MAC entries :contentReference[oaicite:3]{index=3}
-                return snic.address                     # .address holds the MAC string :contentReference[oaicite:4]{index=4}
+        try:
+            # psutil.net_if_addrs() → { iface_name: [snic(addr, netmask, broadcast, ptp), ...], ... }
+            addrs = psutil.net_if_addrs().get(iface, [])  # dict lookup returns [] if iface missing
+            for snic in addrs:
+                # Each snic has .family, .address, .netmask, .broadcast, .ptp
+                if snic.family == psutil.AF_LINK:           # AF_LINK identifies MAC entries
+                    return snic.address                     # .address holds the MAC string
+        except ValueError as e:
+            logger.error(f"Invalid interface {iface}: {e}")
+        except (IndexError, KeyError) as e:
+            logger.error(f"Malformed link data for {iface}: {e}")
+        except Exception as e:
+            logger.exception(f"Unexpected error while getting MAC for {iface}: {e}")
+        logger.error(f"Interface {iface} has no MAC address")   
         return "Unknown" 
 
 
@@ -174,12 +208,17 @@ import random
 def random_mac():
     """Generate a random MAC address for testing purposes."""
     # Locally administered unicast: set top-byte to 0x02
-    mac = [
-        0x02,
-        0x00,
-        0x00,
-        random.randint(0x00, 0xFF),
-        random.randint(0x00, 0xFF),
-        random.randint(0x00, 0xFF)
-    ]
-    return ":".join(f"{b:02x}" for b in mac)
+    try:
+        logger.info("Generating random MAC address")
+        mac = [
+            0x02,
+            0x00,
+            0x00,
+            random.randint(0x00, 0xFF),
+            random.randint(0x00, 0xFF),
+            random.randint(0x00, 0xFF)
+        ]
+        return ":".join(f"{b:02x}" for b in mac)
+    except Exception as e:
+        logger.exception("Error generating random MAC address: %s", e)
+        return "00:00:00:00:00:00"

@@ -9,4 +9,5 @@ env/
 build/
 dist/
 py311venv/
-gui.spec
+*.spec
+app/logs/*

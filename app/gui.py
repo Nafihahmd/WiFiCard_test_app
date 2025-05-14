@@ -17,13 +17,14 @@ from excel_writer import append_result
 import configparser
 from appdirs import user_config_dir
 import os
+from log import logger,initialize_logging
 
 TESTING_ENABLED = True   # ← flip to False to disable result simulation
 if TESTING_ENABLED:
     import time # For testing purposes, simulate connection time
-# Load configuration
+# Configuration File
 cfg = configparser.ConfigParser()
-path = os.path.join(user_config_dir("WiFiTestApp","ECSI"), "settings.ini")
+CFG_PATH = os.path.join(user_config_dir("WiFiTestApp","ECSI"), "settings.ini")
 
 class HardwareTestApp:
     def __init__(self, root):
@@ -145,12 +146,16 @@ class HardwareTestApp:
         self.run_button.pack(pady=5)
 
     def log_message(self, msg):
-        self.log.config(state=tk.NORMAL)
-        self.log.insert(tk.END, msg + "\n")
-        self.log.see(tk.END)
-        self.log.config(state=tk.DISABLED)
-        # Force GUI to update
-        self.root.update_idletasks()
+        logger.info(msg)
+        try:
+            self.log.config(state=tk.NORMAL)
+            self.log.insert(tk.END, msg + "\n")
+            self.log.see(tk.END)
+            self.log.config(state=tk.DISABLED)
+            # Force GUI to update
+            self.root.update_idletasks()        
+        except Exception:
+            logger.warning("Could not update GUI log widget", exc_info=True)
     
     def clear_log(self):
         self.log.configure(state=tk.NORMAL)
@@ -207,7 +212,7 @@ class HardwareTestApp:
             cfg["ui"]["show_progress"] = str(show_progress_var.get())
             cfg["ui"]["auto_save"] = str(auto_save_var.get())
             cfg["ui"]["simulate_result"] = str(sim_rslt_var.get())
-            with open(path, "w") as f:
+            with open(CFG_PATH, "w") as f:
                 cfg.write(f)
 
             self.load_config()
@@ -267,10 +272,15 @@ class HardwareTestApp:
         self.log_message("Refreshing interfaces…")
 
         # collect interface names
-        if self.simulate_result:
-            self.interfaces = ['wlan0', 'wlan1']  # For testing purposes, hardcoded to wlan0 and wlan1
-        else:
-            self.interfaces = scan_interfaces()
+        try:
+            if self.simulate_result:
+                self.interfaces = ['wlan0', 'wlan1']  # For testing purposes, hardcoded to wlan0 and wlan1
+            else:
+                self.interfaces = scan_interfaces()
+        except Exception:
+            logger.error("Error scanning interfaces", exc_info=True)
+            messagebox.showerror("Scan Error", "Could not scan interfaces.")
+            self.interfaces = []
 
         # debug-log exactly what we found
         if not self.interfaces:
@@ -323,22 +333,26 @@ class HardwareTestApp:
                 self.prompt_save_results()
 
     def run_all_tests(self):
-        self.refresh_interfaces()
-        if not self.interfaces:
-            messagebox.showwarning("No Adapters", "No MT7601U adapters found.")
-            return
-        # reset progress bar
-        total = len(self.interfaces)
-        self.progress.config(maximum=total)
-        self.progress_var.set(0)
+        try:
+            self.refresh_interfaces()
+            if not self.interfaces:
+                messagebox.showwarning("No Adapters", "No MT7601U adapters found.")
+                return
+            # reset progress bar
+            total = len(self.interfaces)
+            self.progress.config(maximum=total)
+            self.progress_var.set(0)
 
-        for iface in self.interfaces:
-            self.test_interface(iface)
-            if self.simulate_result:
-                time.sleep(1)  # Simulate time taken for each test
-            # advance progress bar immediately
-            self.progress_var.set(self.progress_var.get() + 1)
-            self.root.update_idletasks()        # ensure bar moves in real time            
+            for iface in self.interfaces:
+                self.test_interface(iface)
+                if self.simulate_result:
+                    time.sleep(1)  # Simulate time taken for each test
+                # advance progress bar immediately
+                self.progress_var.set(self.progress_var.get() + 1)
+                self.root.update_idletasks()        # ensure bar moves in real time    
+        except Exception:
+            logger.error("Error running all tests", exc_info=True)
+            messagebox.showerror("Run Error", "Unhandled error during batch test.")        
 
     def update_widgets(self):
         # Update the interface buttons 
@@ -364,24 +378,36 @@ class HardwareTestApp:
             self.save_results()
 
     def load_config(self):
-        # read settings.ini
-        # Load or create defaults
-        if os.path.exists(path):
-            cfg.read(path)
-        else:
-            cfg["network"] = {"ssid": "ssid", "password": "psswd"}
-            cfg["ui"] = {"show_progress": "no", "auto_save": "no", "simulate_result": "no"}
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, "w") as f:
-                cfg.write(f)
-        self.ssid = cfg["network"]["ssid"]
-        self.password = cfg["network"]["password"]
-        self.show_progress_bar = cfg.getboolean("ui","show_progress")
-        self.auto_save_enabled = cfg.getboolean("ui","auto_save")
-        self.simulate_result = cfg.getboolean("ui","simulate_result")
+        try:
+            # Load or create defaults
+            if os.path.exists(CFG_PATH):
+                cfg.read(CFG_PATH)
+            else:
+                default = {
+                    'network': {'ssid': 'ssid', 'password': 'psswd'},
+                    'ui': {'show_progress': 'no', 'auto_save': 'no', 'simulate_result': 'no'}
+                }
+                cfg.read_dict(default)
+                os.makedirs(os.path.dirname(CFG_PATH), exist_ok=True)
+                with open(CFG_PATH, "w", encoding='utf-8') as f:
+                    cfg.write(f)
+            self.ssid = cfg.get('network', 'ssid', fallback='')
+            self.password = cfg.get('network', 'password', fallback='')
+            self.show_progress_bar = cfg.getboolean('ui', 'show_progress', fallback=False)
+            self.auto_save_enabled = cfg.getboolean('ui', 'auto_save', fallback=False)
+            self.simulate_result = cfg.getboolean('ui', 'simulate_result', fallback=False)
+            logger.info("Configuration loaded from %s", CFG_PATH)       
+        except Exception:
+            logger.error("Failed to load configuration", exc_info=True)
+            messagebox.showerror("Config Error", "Could not load settings. Using defaults.")
             
 
 if __name__ == "__main__":
+    # If you’d rather control it in your main script, remove this block
+    logger.debug("Starting WiFi Test Application")
+    success = initialize_logging(clean_logs=True)
+    if not success:
+        print("Warning: log setup failed, check stderr for details", file=sys.stderr)
     root = tk.Tk()
     app = HardwareTestApp(root)
     root.mainloop()

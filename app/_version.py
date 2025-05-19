@@ -20,3 +20,8 @@ ARCH_TAG = platform.machine().lower()    # e.g. x86_64, aarch64, armv7l
 
 # — Combine into version string — 
 __version__ = f"{MAJOR}.{MINOR}.{PATCH}-{OS_TAG}-{ARCH_TAG}"
+
+# — Optional: expose a function for clarity —
+def get_version():
+    """Return the full version string with platform tag."""
+    return __version__

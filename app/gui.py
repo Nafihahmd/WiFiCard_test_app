@@ -18,6 +18,8 @@ import configparser
 from appdirs import user_config_dir
 import os
 from log import logger,initialize_logging
+from help_gui import HelpCenter
+from _version import __version__
 
 TESTING_ENABLED = True   # ← flip to False to disable result simulation
 if TESTING_ENABLED:
@@ -69,10 +71,9 @@ class HardwareTestApp:
 
         # Help Menu
         help_menu = Menu(menu_bar, tearoff=0)
-        help_menu.add_command(label="Help", command=self.show_help)
-        # help_menu.add_command(label="About", command=self.show_about)
-        help_menu.add_separator()
-        # help_menu.add_command(label="Contact Support", command=self.contact_support)
+        help_menu.add_command(label="Help Center", command=self.show_help)
+        help_menu.add_command(label="About", command=self.show_about)
+        help_menu.add_command(label="Contact Support", command=self.contact_support)
         menu_bar.add_cascade(label="Help", menu=help_menu)
         
         self.root.config(menu=menu_bar)
@@ -247,20 +248,22 @@ class HardwareTestApp:
     
     def show_help(self):
         """Display help information."""
+        HelpCenter(self.root)
+
+    
+    def show_about(self):
+        """Display help information."""
         messagebox.showinfo(
-            "Help",  # Title in title case, no end punctuation
-            "This application tests mPCIe-connected MT7601U Wi-Fi adapters by connecting each to a configured network and verifying IP assignment.\n\n"
-            "• File → Save Results: write current test outcomes to the report file.\n" 
-            "• Configure: set Wi-Fi SSID and password\n"     
-            "• Run Tests: detect all connected adapters, attempt connections, and check for IPs.\n"  
-            "• Progress bar: shows live count of completed tests; updates in real time.\n"      
-            "• Logs: view step-by-step status in the text area for troubleshooting.\n"           
-            "• Interface Buttons: click an individual interface to retest a single dongle.\n"         
-            "• Rescan: re-scan USB and serial/Wi-Fi interfaces on demand.\n"                    
-            "• Color codes: green=PASS, red=FAIL; results saved automatically to Excel.\n"      
-            "• Close this dialog by clicking OK or the × in the corner.\n"                    
+            f"About",  # Title in title case, no end punctuation
+            f"WiFITestSuite{__version__} application tests mPCIe-connected MT7601U Wi-Fi adapters by connecting each to a configured network and verifying IP assignment.\n\n"                  
         )
 
+    def contact_support(self):
+        """Display help information."""
+        messagebox.showinfo(
+            "Support",  # Title in title case, no end punctuation
+            "email the developer at nafih.ahammed@econtrolsystems.com\n\n"                  
+        )
     def rescan_interfaces(self):
         self.log_message("Rescanning interfaces…")
         self.reset_tests()

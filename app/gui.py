@@ -50,6 +50,9 @@ class HardwareTestApp:
         self.buttons = {}         # iface -> Button widget
         self.iface_buttons = {}    # iface -> Interface button widget
 
+        # Create GUI elements
+        self.help_window = None
+
         self.create_menu()
         self.create_widgets()
         self.refresh_interfaces()
@@ -248,7 +251,13 @@ class HardwareTestApp:
     
     def show_help(self):
         """Display help information."""
-        HelpCenter(self.root)
+        if self.help_window is not None and self.help_window.winfo_exists():
+            # Window already open, just bring it to front
+            self.help_window.lift()
+            self.help_window.focus_force()
+        else:
+            # Create new help window
+            self.help_window = HelpCenter(self.root)
 
     
     def show_about(self):

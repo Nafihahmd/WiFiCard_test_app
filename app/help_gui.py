@@ -167,7 +167,7 @@ class HelpCenter(tk.Toplevel):
             # Plain text before **
             pre = full_text[idx:m.start()]
             if pre:
-                self.text.insert(tk.END, pre)
+                self.text.insert(tk.END, pre, tag)
             # Text inside ** **
             bold_chunk = m.group(1)
             self.text.insert(tk.END, bold_chunk, "bold")
